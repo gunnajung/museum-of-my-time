@@ -1,0 +1,12 @@
+# 박물관에 필요 없는 Facebook 원본 데이터
+your_facebook_activity/posts/album/
+your_facebook_activity/posts/media/videos/
+your_facebook_activity/posts/*.html
+
+# 이전 버전 파일
+museum/
+app.js
+
+# macOS
+.DS_Store
+**/.DS_Store

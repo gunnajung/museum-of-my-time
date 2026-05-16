@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>내 시간의 박물관 / Museum of My Time</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ── Top Nav ── -->
+  <nav id="top-nav">
+    <a class="nav-brand" href="#entrance">내 시간의 박물관</a>
+    <div id="year-nav-bar"></div>
+    <button class="lang-btn" onclick="toggleLang()">EN</button>
+  </nav>
+
+  <!-- ── Entrance ── -->
+  <section id="entrance">
+    <p class="eyebrow">개인 디지털 박물관 · Personal Digital Museum</p>
+    <h1 id="museum-title-ko">내 시간의 박물관</h1>
+    <p id="museum-title-en">Museum of My Time</p>
+    <p class="period">2008 – 2026</p>
+    <p id="entrance-desc" class="entrance-desc"></p>
+    <a href="#content" class="enter-btn" id="enter-btn">전시실 입장</a>
+  </section>
+
+  <!-- ── Main Content ── -->
+  <div id="content" style="display:none"></div>
+
+  <!-- ── Album Modal ── -->
+  <div id="album-modal" onclick="if(event.target===this)closeAlbumModal()">
+    <div class="modal-inner">
+      <button class="modal-close" onclick="closeAlbumModal()">&#x2715;</button>
+      <div class="modal-header">
+        <p id="modal-theme-label" class="modal-theme-label"></p>
+        <h2 id="modal-title"></h2>
+        <p id="modal-desc" class="modal-desc"></p>
+        <p id="modal-meta" class="modal-meta"></p>
+      </div>
+      <div id="modal-grid" class="modal-grid"></div>
+    </div>
+  </div>
+
+  <!-- ── Lightbox ── -->
+  <div id="lightbox" onclick="if(event.target===this)closeLb()">
+    <button class="lb-close" onclick="closeLb()">&#x2715;</button>
+    <button class="lb-prev" onclick="lbPrev()">&#x2039;</button>
+    <button class="lb-next" onclick="lbNext()">&#x203a;</button>
+    <div class="lb-img-wrap"><img id="lb-img" src="" alt=""></div>
+    <p id="lb-caption" class="lb-caption"></p>
+    <p id="lb-counter" class="lb-counter"></p>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="museum.js"></script>
+</body>
+</html>
