@@ -130,6 +130,35 @@ function closeAlbumModal() {
   document.body.style.overflow = '';
 }
 
+/* ── Photo-post modal ── */
+function openPhotoPostModal(idx) {
+  var pp = (typeof PHOTO_POSTS !== 'undefined') && PHOTO_POSTS[idx];
+  if (!pp) return;
+
+  _modalImgs = pp.photos.map(function(p) {
+    return { src: p.src, caption: p.caption || '' };
+  });
+
+  document.getElementById('modal-theme-label').textContent = t('포스트 사진', 'Post Photos');
+  document.getElementById('modal-title').textContent       = pp.date;
+  document.getElementById('modal-desc').textContent        = pp.text || '';
+  document.getElementById('modal-meta').textContent        = pp.photos.length > 1
+    ? pp.photos.length + t('장의 사진', ' photos') : '';
+
+  document.getElementById('modal-grid').innerHTML = pp.photos.map(function(p, i) {
+    return '<div class="modal-photo" onclick="openLbFromModal(' + i + ')">' +
+           '<div class="modal-photo-img">' +
+           '<img src="' + p.src + '" loading="lazy" ' +
+           'onerror="this.parentElement.parentElement.style.opacity=\'0.15\'" alt="">' +
+           '</div>' +
+           (p.caption ? '<p class="modal-caption-text">' + esc(p.caption) + '</p>' : '') +
+           '</div>';
+  }).join('');
+
+  document.getElementById('album-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
 /* ── Text post modal ── */
 function openPostModal(postIdx) {
   if (!TEXT_POSTS || !TEXT_POSTS[postIdx]) return;
@@ -180,6 +209,24 @@ function groupByTheme(albums) {
   return order.map(function(k) { return map[k]; });
 }
 
+/* ── Photo-post card ── */
+function renderPhotoPostCard(pp, idx) {
+  var thumb = pp.photos[0].src;
+  var count = pp.photos.length;
+  var badge = count > 1 ? '<span class="album-card-count">' + count + '</span>' : '';
+  var preview = pp.text
+    ? '<p class="album-card-caption">' + esc(pp.text.slice(0, 160)) + (pp.text.length > 160 ? '…' : '') + '</p>'
+    : '';
+  return '<div class="album-card" onclick="openPhotoPostModal(' + idx + ')">' +
+    '<div class="album-card-thumb">' +
+    '<img src="' + thumb + '" loading="lazy" onerror="this.style.opacity=\'0\'" alt="">' +
+    badge + '</div>' +
+    '<div class="album-card-info">' +
+    '<p class="album-card-date">' + esc(pp.date) + '</p>' +
+    preview +
+    '</div></div>';
+}
+
 /* ── Album card ── */
 function renderAlbumCard(a) {
   var thumb = a.photos[0].src;
@@ -227,32 +274,56 @@ function renderYearNav(byYear) {
 
 /* ── Full render ── */
 function renderAll() {
-  /* entrance text */
   var desc = document.getElementById('entrance-desc');
   var btn  = document.getElementById('enter-btn');
   if (desc) desc.textContent = lang === 0 ? MUSEUM_DESC_KO : MUSEUM_DESC_EN;
   if (btn)  btn.textContent  = t('전시실 입장', 'Enter Exhibition');
 
-  var byYear = organizeByYear(ALBUMS);
-  renderYearNav(byYear);
+  /* Collect all years from all three data sources */
+  var allYears = {};
+  function ensureYear(y) { if (!allYears[y]) allYears[y] = { albums: [], photoPosts: [], textPosts: [] }; }
 
-  /* Build text-posts lookup by year */
-  var postsByYear = {};
-  if (typeof TEXT_POSTS !== 'undefined') {
-    TEXT_POSTS.forEach(function(p, i) {
-      p._idx = i;
-      var y = p.year || 9999;
-      postsByYear[y] = postsByYear[y] || [];
-      postsByYear[y].push(p);
+  ALBUMS.forEach(function(a, i) {
+    a.idx = i;
+    var y = a.year || 9999;
+    ensureYear(y);
+    allYears[y].albums.push(a);
+  });
+
+  if (typeof PHOTO_POSTS !== 'undefined') {
+    PHOTO_POSTS.forEach(function(pp, i) {
+      var y = pp.year || 9999;
+      ensureYear(y);
+      allYears[y].photoPosts.push({ pp: pp, idx: i });
     });
   }
 
-  var html = byYear.map(function(yg) {
-    var grouped = groupByTheme(yg.albums);
-    var multi   = grouped.length > 1;
-    var yLabel  = yg.year === 9999 ? t('연도 미상', 'Unknown Year') : yg.year;
-    var aCount  = yg.albums.length + t('개 앨범', ' albums');
+  if (typeof TEXT_POSTS !== 'undefined') {
+    TEXT_POSTS.forEach(function(p, i) {
+      var y = p.year || 9999;
+      ensureYear(y);
+      allYears[y].textPosts.push({ p: p, idx: i });
+    });
+  }
 
+  var sortedYears = Object.keys(allYears).map(Number).sort(function(a, b) { return a - b; });
+
+  /* Year nav */
+  var bar = document.getElementById('year-nav-bar');
+  if (bar) {
+    bar.innerHTML = sortedYears.map(function(y) {
+      var label = y === 9999 ? t('연도 미상', 'Unknown') : y;
+      return '<a class="year-pill" href="#year-' + y + '">' + label + '</a>';
+    }).join('');
+  }
+
+  var html = sortedYears.map(function(y) {
+    var ydata  = allYears[y];
+    var yLabel = y === 9999 ? t('연도 미상', 'Unknown Year') : y;
+
+    /* Named albums by theme */
+    var grouped    = groupByTheme(ydata.albums);
+    var multi      = grouped.length > 1;
     var albumsHtml = grouped.map(function(tg) {
       var tlabel = multi
         ? '<p class="theme-label">' + t(tg.theme.ko, tg.theme.en) + '</p>' : '';
@@ -260,21 +331,36 @@ function renderAll() {
              '<div class="album-grid">' + tg.albums.map(renderAlbumCard).join('') + '</div></div>';
     }).join('');
 
-    /* Text posts for this year */
-    var yearPosts = postsByYear[yg.year] || [];
-    var postsHtml = '';
-    if (yearPosts.length) {
-      var cards = yearPosts.map(function(p) { return renderPostCard(p, p._idx); }).join('');
-      postsHtml = '<div class="theme-group">' +
-        '<p class="theme-label">' + t('글·포스트', 'Posts & Updates') + '</p>' +
-        '<div class="post-grid">' + cards + '</div></div>';
+    /* Photo posts */
+    var photoPostHtml = '';
+    if (ydata.photoPosts.length) {
+      var cards = ydata.photoPosts.map(function(item) {
+        return renderPhotoPostCard(item.pp, item.idx);
+      }).join('');
+      photoPostHtml = '<div class="theme-group">' +
+        '<p class="theme-label">' + t('사진·포스트', 'Photo Posts') + '</p>' +
+        '<div class="album-grid">' + cards + '</div></div>';
     }
 
-    return '<section class="year-section" id="year-' + yg.year + '">' +
+    /* Text posts */
+    var postsHtml = '';
+    if (ydata.textPosts.length) {
+      var tcards = ydata.textPosts.map(function(item) {
+        return renderPostCard(item.p, item.idx);
+      }).join('');
+      postsHtml = '<div class="theme-group">' +
+        '<p class="theme-label">' + t('글·포스트', 'Posts & Updates') + '</p>' +
+        '<div class="post-grid">' + tcards + '</div></div>';
+    }
+
+    var total = ydata.albums.length + ydata.photoPosts.length + ydata.textPosts.length;
+    var countLabel = total + t('개 기록', ' records');
+
+    return '<section class="year-section" id="year-' + y + '">' +
       '<div class="year-header">' +
       '<h2 class="year-title">' + yLabel + '</h2>' +
-      '<p class="year-count">'  + aCount + '</p>' +
-      '</div>' + albumsHtml + postsHtml + '</section>';
+      '<p class="year-count">' + countLabel + '</p>' +
+      '</div>' + albumsHtml + photoPostHtml + postsHtml + '</section>';
   }).join('');
 
   html += '<footer class="museum-footer">' +
