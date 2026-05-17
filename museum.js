@@ -10,6 +10,8 @@ function t(ko, en) { return lang === 0 ? ko : en; }
 function toggleLang() {
   lang = 1 - lang;
   document.querySelector('.lang-btn').textContent = lang === 0 ? 'EN' : '한';
+  var inp = document.getElementById('search-input');
+  if (inp) inp.placeholder = lang === 0 ? '검색…' : 'Search…';
   renderAll();
 }
 
@@ -172,6 +174,170 @@ function openPostModal(postIdx) {
   document.body.style.overflow = 'hidden';
 }
 
+/* ── Search ── */
+var SEARCH_INDEX = [];
+var _searchResultFocus = -1;
+
+function buildSearchIndex() {
+  SEARCH_INDEX = [];
+
+  ALBUMS.forEach(function(a, i) {
+    var parts = [a.title, a.desc];
+    a.photos.forEach(function(p) { if (p.caption) parts.push(p.caption); });
+    SEARCH_INDEX.push({
+      type: 'album', idx: i, year: a.year || '?',
+      label: a.title,
+      preview: a.desc || (a.photos[0] && a.photos[0].caption) || '',
+      searchText: parts.join(' ').toLowerCase(),
+      thumb: a.photos[0] ? a.photos[0].src : null,
+    });
+  });
+
+  if (typeof PHOTO_POSTS !== 'undefined') {
+    PHOTO_POSTS.forEach(function(pp, i) {
+      var parts = [pp.text];
+      pp.photos.forEach(function(p) { if (p.caption) parts.push(p.caption); });
+      SEARCH_INDEX.push({
+        type: 'photo_post', idx: i, year: pp.year || '?',
+        label: pp.text || pp.date,
+        preview: pp.text || '',
+        searchText: parts.join(' ').toLowerCase(),
+        thumb: pp.photos[0] ? pp.photos[0].src : null,
+      });
+    });
+  }
+
+  if (typeof TEXT_POSTS !== 'undefined') {
+    TEXT_POSTS.forEach(function(tp, i) {
+      SEARCH_INDEX.push({
+        type: 'text_post', idx: i, year: tp.year || '?',
+        label: tp.text,
+        preview: tp.text,
+        searchText: tp.text.toLowerCase(),
+        thumb: null,
+      });
+    });
+  }
+}
+
+function highlightQuery(text, query) {
+  if (!text) return '';
+  var safe = esc(text);
+  if (!query) return safe;
+  var re = new RegExp('(' + query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+  return safe.replace(re, '<mark>$1</mark>');
+}
+
+function openSearch() {
+  document.getElementById('year-nav-bar').style.display = 'none';
+  document.getElementById('search-open-btn').style.display = 'none';
+  document.getElementById('search-area').classList.add('open');
+  document.getElementById('search-input').focus();
+}
+
+function closeSearch() {
+  document.getElementById('search-area').classList.remove('open');
+  document.getElementById('year-nav-bar').style.display = '';
+  document.getElementById('search-open-btn').style.display = '';
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-results-panel').classList.remove('open');
+  document.getElementById('search-results-panel').innerHTML = '';
+  _searchResultFocus = -1;
+}
+
+function onSearchInput(query) {
+  query = query.trim();
+  var panel = document.getElementById('search-results-panel');
+  _searchResultFocus = -1;
+
+  if (!query || query.length < 2) {
+    panel.classList.remove('open');
+    panel.innerHTML = '';
+    return;
+  }
+
+  var q = query.toLowerCase();
+  var results = SEARCH_INDEX.filter(function(item) {
+    return item.searchText.indexOf(q) !== -1;
+  }).slice(0, 40);
+
+  if (!results.length) {
+    panel.innerHTML = '<p class="search-no-results">' + t('검색 결과 없음', 'No results found') + '</p>';
+    panel.classList.add('open');
+    return;
+  }
+
+  /* Group by year */
+  var byYear = {}, yearOrder = [];
+  results.forEach(function(r) {
+    var y = r.year;
+    if (!byYear[y]) { byYear[y] = []; yearOrder.push(y); }
+    byYear[y].push(r);
+  });
+
+  var countLabel = results.length === 40
+    ? t('40개 이상의 결과', '40+ results')
+    : results.length + t('개 결과', ' results');
+
+  var html = '<p class="search-count">' + countLabel + '</p>';
+
+  html += yearOrder.map(function(y) {
+    var items = byYear[y].map(function(r) {
+      var thumb = r.thumb
+        ? '<img src="' + r.thumb + '" class="search-result-thumb" loading="lazy" onerror="this.className=\'search-result-thumb search-result-thumb-empty\';this.removeAttribute(\'src\')">'
+        : '<div class="search-result-thumb search-result-thumb-empty"></div>';
+
+      var typeLabel = r.type === 'album'      ? t('앨범', 'Album')
+                    : r.type === 'photo_post' ? t('사진', 'Photo')
+                    : t('글', 'Text');
+
+      var labelHtml = highlightQuery(r.label.slice(0, 80), query)
+                    + (r.label.length > 80 ? '…' : '');
+
+      var action = r.type === 'album'      ? 'openAlbumModal(' + r.idx + ')'
+                 : r.type === 'photo_post' ? 'openPhotoPostModal(' + r.idx + ')'
+                 : 'openPostModal(' + r.idx + ')';
+
+      return '<div class="search-result-item" tabindex="0" ' +
+             'onclick="' + action + ';closeSearch()" ' +
+             'onkeydown="if(event.key===\'Enter\'){' + action + ';closeSearch()}">' +
+             thumb +
+             '<div class="search-result-info">' +
+             '<span class="search-result-type">' + typeLabel + '</span>' +
+             '<span class="search-result-label">' + labelHtml + '</span>' +
+             '</div></div>';
+    }).join('');
+
+    return '<div class="search-year-group">' +
+           '<p class="search-year-label">' + y + '</p>' +
+           items + '</div>';
+  }).join('');
+
+  panel.innerHTML = html;
+  panel.classList.add('open');
+}
+
+function onSearchKey(e) {
+  var panel = document.getElementById('search-results-panel');
+  var items = panel.querySelectorAll('.search-result-item');
+  if (!items.length) {
+    if (e.key === 'Escape') closeSearch();
+    return;
+  }
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    _searchResultFocus = Math.min(_searchResultFocus + 1, items.length - 1);
+    items[_searchResultFocus].focus();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    _searchResultFocus = Math.max(_searchResultFocus - 1, -1);
+    if (_searchResultFocus === -1) document.getElementById('search-input').focus();
+    else items[_searchResultFocus].focus();
+  } else if (e.key === 'Escape') {
+    closeSearch();
+  }
+}
+
 /* ── Keyboard shortcuts ── */
 document.addEventListener('keydown', function(e) {
   if (document.getElementById('lightbox').classList.contains('open')) {
@@ -182,6 +348,10 @@ document.addEventListener('keydown', function(e) {
   }
   if (document.getElementById('album-modal').classList.contains('open')) {
     if (e.key === 'Escape') closeAlbumModal();
+    return;
+  }
+  if (document.getElementById('search-results-panel').classList.contains('open')) {
+    if (e.key === 'Escape') closeSearch();
   }
 });
 
@@ -395,6 +565,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
   /* Pre-render content (data is already in memory from data.js) */
   renderAll();
+  buildSearchIndex();
+  var inp = document.getElementById('search-input');
+  if (inp) inp.placeholder = '검색…';
 
   /* Enter button: hide entrance, scroll to content */
   if (btn) {

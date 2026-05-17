@@ -12,8 +12,16 @@
   <nav id="top-nav">
     <a class="nav-brand" href="#entrance">내 시간의 박물관</a>
     <div id="year-nav-bar"></div>
+    <div id="search-area">
+      <input type="text" id="search-input" autocomplete="off"
+             oninput="onSearchInput(this.value)"
+             onkeydown="onSearchKey(event)">
+      <button class="search-close-btn" onclick="closeSearch()">&#x2715;</button>
+    </div>
+    <button class="search-open-btn" id="search-open-btn" onclick="openSearch()">&#x2315;</button>
     <button class="lang-btn" onclick="toggleLang()">EN</button>
   </nav>
+  <div id="search-results-panel" onclick="event.stopPropagation()"></div>
 
   <!-- ── Entrance ── -->
   <section id="entrance">
